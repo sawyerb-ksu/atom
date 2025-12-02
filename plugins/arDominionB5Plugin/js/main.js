@@ -38,5 +38,6 @@ import "/js/rights";
 import "/js/fullWidthTreeView";
 import "/js/deletePhysicalStorage";
 import "/js/settingsFindingAid";
+import "/js/historyNavigation";
 import "/js/windowReload";
 import "/js/physicalStorageAddToClipboard";
