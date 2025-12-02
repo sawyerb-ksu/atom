@@ -36,7 +36,31 @@
     $resources = [];
     $informationObjects = [];
     foreach (QubitRelation::getRelatedObjectsBySubjectId('QubitInformationObject', $resource->id, ['typeId' => QubitTerm::HAS_PHYSICAL_OBJECT_ID]) as $item) {
-      $resources[] = link_to(render_title($item), [$item, 'module' => 'informationobject']);
+      $displayTitle = '';
+
+      if (!empty($item->levelOfDescription)) {
+        $displayTitle .= sprintf('%s ', $item->levelOfDescription);
+      }
+
+      if (!empty($item->identifier)) {
+        $displayTitle .= sprintf('%s ', $item->identifier);
+      }
+
+      if (!empty($displayTitle)) {
+        $displayTitle .= '- ';
+      }
+
+      if (!empty($item->title)) {
+        $displayTitle .= $item->title;
+      } else {
+        $displayTitle .= __('Untitled');
+      }
+
+      if (QubitTerm::PUBLICATION_STATUS_DRAFT_ID == $item->getPublicationStatus()->statusId) {
+        $displayTitle .= sprintf(' (%s)', $item->getPublicationStatus());
+      }
+
+      $resources[] = link_to(render_title($displayTitle), [$item, 'module' => 'informationobject']);
       $informationObjects[] = $item;
     }
     echo render_show(__('Related resources'), $resources, ['valueClass' => 'field', 'renderAsIs' => true]);
@@ -46,7 +70,19 @@
     $accessions = [];
     $accessionObjects = [];
     foreach (QubitRelation::getRelatedObjectsBySubjectId('QubitAccession', $resource->id, ['typeId' => QubitTerm::HAS_PHYSICAL_OBJECT_ID]) as $item) {
-      $accessions[] = link_to(render_title($item), [$item, 'module' => 'accession']);
+      $displayTitle = '';
+
+      if (!empty($item->identifier)) {
+        $displayTitle .= sprintf('%s - ', $item->identifier);
+      }
+
+      if (!empty($item->title)) {
+        $displayTitle .= $item->title;
+      } else {
+        $displayTitle .= __('Untitled');
+      }
+
+      $accessions[] = link_to(render_title($displayTitle), [$item, 'module' => 'accession']);
       $accessionObjects[] = $item;
     }
     echo render_show(__('Related accessions'), $accessions, ['valueClass' => 'field', 'renderAsIs' => true]);
