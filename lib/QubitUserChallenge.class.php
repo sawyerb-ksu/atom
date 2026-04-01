@@ -109,6 +109,28 @@ class QubitUserChallenge
         return false;
     }
 
+    public static function matchesEndpointException(string $requestUri, array $prefixes): bool
+    {
+        $requestPath = parse_url($requestUri, PHP_URL_PATH);
+        if (false === $requestPath || null === $requestPath || '' === $requestPath) {
+            $requestPath = '/';
+        }
+
+        $patterns = array_map(function (string $path) {
+            $escaped = preg_quote($path, '#');
+
+            return '#^'.$escaped.'(/.*)?$#';
+        }, $prefixes);
+
+        foreach ($patterns as $pattern) {
+            if (preg_match($pattern, $requestPath)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public function setCookie(
         $name,
         $value = '',

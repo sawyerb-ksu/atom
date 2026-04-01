@@ -33,29 +33,18 @@ if (!$activated || (0 === strpos($_SERVER['REQUEST_URI'], '/challenge'))) {
     return;
 }
 
+// Load helper class.
+require_once __DIR__.'/../../lib/QubitUserChallenge.class.php';
+
 // Check if the request URI matches any of the endpoint exceptions.
 $prefixes = $config['endpoint_exceptions'] ?? [];
-
-$patterns = array_map(function (string $path) {
-    // Escape any regex-special chars in the raw path.
-    $escaped = preg_quote($path, '#');
-
-    // Match exactly the path or any subpath.
-    return '#^'.$escaped.'(/.*)?$#';
-}, $prefixes);
-
 $requestUri = $_SERVER['REQUEST_URI'] ?? '/';
-$requestPath = parse_url($requestUri, PHP_URL_PATH) ?? '/';
-foreach ($patterns as $pattern) {
-    if (preg_match($pattern, $requestPath)) {
-        return;
-    }
+if (QubitUserChallenge::matchesEndpointException($requestUri, $prefixes)) {
+    return;
 }
 
-// Load helper classes.
+// Load helper class.
 require_once __DIR__.'/../../lib/QubitGeoIpHelper.class.php';
-
-require_once __DIR__.'/../../lib/QubitUserChallenge.class.php';
 
 // Get Remote IP from request.
 $remoteIp = $_SERVER['REMOTE_ADDR'] ?? null;

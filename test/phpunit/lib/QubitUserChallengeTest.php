@@ -141,4 +141,56 @@ class QubitUserChallengeTest extends TestCase
         // Should not throw even if logger is not set
         $this->assertNull($method->invoke($userChallenge), 'logInfo should not throw if logger is not set.');
     }
+
+    /**
+     * @dataProvider endpointExceptionProvider
+     */
+    public function testMatchesEndpointException(string $requestUri, array $prefixes, bool $expected)
+    {
+        $this->assertSame(
+            $expected,
+            QubitUserChallenge::matchesEndpointException($requestUri, $prefixes)
+        );
+    }
+
+    public function endpointExceptionProvider()
+    {
+        return [
+            'oai exact path with query string' => [
+                'requestUri' => '/;oai?verb=ListRecords&metadataPrefix=oai_dc&from=2026-03-14T03:03:00Z',
+                'prefixes' => ['/;oai'],
+                'expected' => true,
+            ],
+            'api exact path with query string' => [
+                'requestUri' => '/api?foo=bar',
+                'prefixes' => ['/api'],
+                'expected' => true,
+            ],
+            'api subpath' => [
+                'requestUri' => '/api/search?query=oai',
+                'prefixes' => ['/api'],
+                'expected' => true,
+            ],
+            'qt sword plugin exact path with query string' => [
+                'requestUri' => '/qtSwordPlugin?x=1',
+                'prefixes' => ['/qtSwordPlugin'],
+                'expected' => true,
+            ],
+            'qt sword plugin subpath' => [
+                'requestUri' => '/qtSwordPlugin/status',
+                'prefixes' => ['/qtSwordPlugin'],
+                'expected' => true,
+            ],
+            'similar api path does not match' => [
+                'requestUri' => '/apix?foo=bar',
+                'prefixes' => ['/api'],
+                'expected' => false,
+            ],
+            'similar plugin path does not match' => [
+                'requestUri' => '/qtSwordPlugins',
+                'prefixes' => ['/qtSwordPlugin'],
+                'expected' => false,
+            ],
+        ];
+    }
 }
