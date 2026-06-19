@@ -34,43 +34,58 @@ class arRepositoryThemeCropValidatedFile extends sfValidatedFile
     {
         $file = parent::save($file, $fileMode, $create, $dirMode);
 
-        // Check if mogrify is available in the system
-        exec('which mogrify', $output, $status);
-        if (0 < $status) {
+        if (!$this->shouldCropImages()) {
             return $file;
         }
 
-        // Figure out necessary dimensions from the filename
-        $pathInfo = pathinfo($this->savedName);
+        if (null === $dimensions = self::getCropDimensionsFromPath($this->savedName)) {
+            return $file;
+        }
+
+        $this->cropImage($dimensions['width'], $dimensions['height']);
+
+        return $file;
+    }
+
+    public static function getCropDimensionsFromPath($path)
+    {
+        $pathInfo = pathinfo($path);
 
         switch ($pathInfo['filename']) {
             case 'logo':
-                $width = self::LOGO_MAX_WIDTH;
-                $height = self::LOGO_MAX_HEIGHT;
-
-                break;
+                return [
+                    'width' => self::LOGO_MAX_WIDTH,
+                    'height' => self::LOGO_MAX_HEIGHT,
+                ];
 
             case 'banner':
-                $width = self::BANNER_MAX_WIDTH;
-                $height = self::BANNER_MAX_HEIGHT;
-
-                break;
+                return [
+                    'width' => self::BANNER_MAX_WIDTH,
+                    'height' => self::BANNER_MAX_HEIGHT,
+                ];
         }
+    }
 
-        // Stop execution if dimensions were not set
-        if (!isset($width, $height)) {
-            return $file;
+    protected function shouldCropImages()
+    {
+        return QubitDigitalObject::imagickExtensionLoaded();
+    }
+
+    protected function cropImage($width, $height)
+    {
+        try {
+            $image = new Imagick($this->savedName);
+
+            $cropWidth = min($width, $image->getImageWidth());
+            $cropHeight = min($height, $image->getImageHeight());
+
+            $image->cropImage($cropWidth, $cropHeight, 0, 0);
+            $image->setImagePage(0, 0, 0, 0);
+            $image->writeImage($this->savedName);
+            $image->clear();
+            $image->destroy();
+        } catch (Exception $e) {
+            // Leave the uploaded file untouched if Imagick cannot process it.
         }
-
-        // mogrify overwrites the original image file
-        $command = sprintf(
-            'mogrify -crop %sx%s+0+0 %s',
-            $width,
-            $height,
-            $this->savedName
-        );
-        exec($command, $output, $status);
-
-        return $file;
     }
 }
