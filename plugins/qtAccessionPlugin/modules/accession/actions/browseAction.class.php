@@ -17,133 +17,102 @@
  * along with Access to Memory (AtoM).  If not, see <http://www.gnu.org/licenses/>.
  */
 
-class AccessionBrowseAction extends sfAction
+class AccessionBrowseAction extends DefaultBrowseAction
 {
+    public static $AGGS = [
+        'acquisitionType' => [
+            'type' => 'term',
+            'field' => 'acquisitionType.id',
+            'size' => 10,
+        ],
+        'resourceType' => [
+            'type' => 'term',
+            'field' => 'resourceType.id',
+            'size' => 10,
+        ],
+        'processingStatus' => [
+            'type' => 'term',
+            'field' => 'processingStatus.id',
+            'size' => 10,
+        ],
+        'processingPriority' => [
+            'type' => 'term',
+            'field' => 'processingPriority.id',
+            'size' => 10,
+        ],
+        'donor' => [
+            'type' => 'term',
+            'field' => 'donors.id',
+            'size' => 10,
+        ],
+        'creator' => [
+            'type' => 'term',
+            'field' => 'creators.id',
+            'size' => 10,
+        ],
+    ];
+
     public function execute($request)
     {
-        $title = $this->context->i18n->__(ucfirst($this->context->getModuleName()));
-        $this->response->setTitle("{$title} - {$this->response->getTitle()}");
-
-        if (!isset($request->limit)) {
-            $request->limit = sfConfig::get('app_hits_per_page');
+        // If a global search has been requested, translate that into an advanced search
+        if (isset($request->subquery)) {
+            $request->sq0 = $request->subquery;
         }
 
-        if (!isset($request->page)) {
-            $request->page = 1;
+        // Add first criterion to the search box if it's over any field
+        if (1 !== preg_match('/^[\s\t\r\n]*$/', $request->sq0) && !isset($request->sf0)) {
+            $request->subquery = $request->sq0;
         }
 
-        // Avoid pagination over ES' max result window config (default: 10000)
-        $maxResultWindow = arElasticSearchPluginConfiguration::getMaxResultWindow();
+        // Create the query and filter it with the selected aggs
+        parent::execute($request);
 
-        if ((int) $request->limit * (int) $request->page > $maxResultWindow) {
-            // Show alert
-            $message = $this->context->i18n->__(
-                "We've redirected you to the first page of results. To avoid using vast amounts of memory, AtoM limits pagination to %1% records. To view the last records in the current result set, try changing the sort direction.",
-                ['%1%' => $maxResultWindow]
-            );
-            $this->getUser()->setFlash('notice', $message);
+        // Add advanced search filters to process sq0 query
+        $this->search->addAdvancedSearchFilters([], $request->getParameterHolder()->getAll(), 'accession');
 
-            // Redirect to first page
-            $params = $request->getParameterHolder()->getAll();
-            unset($params['page']);
-            $this->redirect($params);
-        }
+        $this->search->query->setQuery($this->search->queryBool);
 
-        $this->sortOptions = [
-            'lastUpdated' => $this->context->i18n->__('Date modified'),
-            'accessionNumber' => $this->context->i18n->__('Accession number'),
-            'title' => $this->context->i18n->__('Title'),
-            'acquisitionDate' => $this->context->i18n->__('Acquisition date'),
-        ];
+        $this->setSort($request);
 
-        if (!isset($request->sort)) {
-            if (1 !== preg_match('/^[\s\t\r\n]*$/', $request->subquery)) {
-                $request->sort = 'relevance';
-            } elseif ($this->getUser()->isAuthenticated()) {
-                $request->sort = sfConfig::get('app_sort_browser_user');
-            } else {
-                $request->sort = sfConfig::get('app_sort_browser_anonymous');
-            }
-        }
+        // Do the search
+        $resultSet = QubitSearch::getInstance()
+            ->index
+            ->getIndex('QubitAccession')
+            ->search($this->search->query);
 
-        // Default sort direction
-        $sortDir = 'asc';
-        if ('lastUpdated' == $request->sort) {
-            $sortDir = 'desc';
-        }
+        $this->pager = new QubitSearchPager($resultSet);
+        $this->pager->setPage($request->page ?: 1);
+        $this->pager->setMaxPerPage($request->limit);
+        $this->pager->init();
 
-        // Set default sort direction in request if not present or not valid
-        if (!isset($request->sortDir) || !in_array($request->sortDir, ['asc', 'desc'])) {
-            $request->sortDir = $sortDir;
-        }
+        $this->populateAggs($resultSet);
+    }
 
-        $culture = $this->context->user->getCulture();
-
-        $this->query = new \Elastica\Query();
-        $this->query->setSize($request->limit);
-        $this->query->setFrom(($request->page - 1) * $request->limit);
-
-        $this->queryBool = new \Elastica\Query\BoolQuery();
-
-        if (1 === preg_match('/^[\s\t\r\n]*$/', $request->subquery)) {
-            $this->queryBool->addMust(new \Elastica\Query\MatchAll());
-        } else {
-            $fields = [
-                'identifier' => 10,
-                'donors.i18n.%s.authorizedFormOfName' => 10,
-                'i18n.%s.title' => 10,
-                'i18n.%s.scopeAndContent' => 10,
-                'i18n.%s.locationInformation' => 5,
-                'i18n.%s.processingNotes' => 5,
-                'i18n.%s.sourceOfAcquisition' => 5,
-                'i18n.%s.archivalHistory' => 5,
-                'i18n.%s.appraisal' => 1,
-                'i18n.%s.physicalCharacteristics' => 1,
-                'i18n.%s.receivedExtentUnits' => 1,
-                'acquisitionType.i18n.%s.name' => 1,
-                'processingPriority.i18n.%s.name' => 1,
-                'processingStatus.i18n.%s.name' => 1,
-                'resourceType.i18n.%s.name' => 1,
-                'alternativeIdentifiers.i18n.%s.name' => 1,
-                'creators.i18n.%s.authorizedFormOfName' => 1,
-                'alternativeIdentifiers.i18n.%s.note' => 1,
-                'alternativeIdentifiers.type.i18n.%s.name' => 1,
-                'accessionEvents.i18n.%s.agent' => 1,
-                'accessionEvents.type.i18n.%s.name' => 1,
-                'accessionEvents.notes.i18n.%s.content' => 1,
-                'donors.contactInformations.contactPerson' => 1,
-                'accessionEvents.dateString' => 1,
-            ];
-
-            $this->queryBool->addMust(
-                arElasticSearchPluginUtil::generateQueryString(
-                    $request->subquery, $fields
-                )
-            );
-
-            $this->sortOptions['relevance'] = $this->context->i18n->__('Relevance');
-        }
-
-        // Set query
-        $this->query->setQuery($this->queryBool);
-
-        // Set order
+    /**
+     * Set sort order based on requested ordering.
+     *
+     * Modifies $this->search in-place.
+     *
+     * @param mixed $request
+     */
+    protected function setSort($request)
+    {
         switch ($request->sort) {
             case 'identifier': // For backward compatibility
             case 'accessionNumber':
-                $this->query->setSort(['identifier.untouched' => $request->sortDir]);
+                $this->search->query->setSort(['identifier.untouched' => $request->sortDir]);
 
                 break;
 
             case 'title':
             case 'alphabetic': // For backward compatibility
                 $field = sprintf('i18n.%s.title.alphasort', $this->context->user->getCulture());
-                $this->query->addSort([$field => $request->sortDir]);
+                $this->search->query->addSort([$field => $request->sortDir]);
 
                 break;
 
             case 'acquisitionDate':
-                $this->query->addSort(['date' => ['order' => $request->sortDir, 'missing' => '_last']]);
+                $this->search->query->addSort(['date' => ['order' => $request->sortDir, 'missing' => '_last']]);
 
                 break;
 
@@ -153,16 +122,61 @@ class AccessionBrowseAction extends sfAction
 
             case 'lastUpdated':
             default:
-                $this->query->setSort(['updatedAt' => $request->sortDir]);
+                $this->search->query->setSort(['updatedAt' => $request->sortDir]);
 
                 break;
         }
+    }
 
-        $resultSet = QubitSearch::getInstance()->index->getIndex('QubitAccession')->search($this->query);
+    /**
+     * Implement aggregations for fields in $AGGS.
+     *
+     * @param mixed $name
+     * @param mixed $buckets
+     */
+    protected function populateAgg($name, $buckets)
+    {
+        switch ($name) {
+            case 'acquisitionType':
+            case 'resourceType':
+            case 'processingStatus':
+            case 'processingPriority':
+                $ids = array_column($buckets, 'key');
+                $criteria = new Criteria();
+                $criteria->add(QubitTerm::ID, $ids, Criteria::IN);
 
-        $this->pager = new QubitSearchPager($resultSet);
-        $this->pager->setPage($request->page ? $request->page : 1);
-        $this->pager->setMaxPerPage($request->limit);
-        $this->pager->init();
+                foreach (QubitTerm::get($criteria) as $item) {
+                    $buckets[array_search($item->id, $ids)]['display'] = $item->getName(['cultureFallback' => true]);
+                }
+
+                break;
+
+            case 'donor':
+                $ids = array_column($buckets, 'key');
+                $criteria = new Criteria();
+                $criteria->add(QubitDonor::ID, $ids, Criteria::IN);
+
+                foreach (QubitDonor::get($criteria) as $item) {
+                    $buckets[array_search($item->id, $ids)]['display'] = $item->__toString();
+                }
+
+                break;
+
+            case 'creator':
+                $ids = array_column($buckets, 'key');
+                $criteria = new Criteria();
+                $criteria->add(QubitActor::ID, $ids, Criteria::IN);
+
+                foreach (QubitActor::get($criteria) as $item) {
+                    $buckets[array_search($item->id, $ids)]['display'] = $item->__toString();
+                }
+
+                break;
+
+            default:
+                return parent::populateAgg($name, $buckets);
+        }
+
+        return $buckets;
     }
 }
