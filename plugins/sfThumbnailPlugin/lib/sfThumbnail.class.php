@@ -35,6 +35,11 @@ class sfThumbnail
     protected $tempFile;
 
     /**
+     * Does the work of creating the thumbnail.
+     */
+    protected $adapter;
+
+    /**
      * Thumbnail constructor.
      *
      * @param int (optional) max width of thumbnail
@@ -54,10 +59,12 @@ class sfThumbnail
     public function __construct($maxWidth = null, $maxHeight = null, $scale = true, $inflate = true, $quality = 75, $adapterClass = null, $adapterOptions = [])
     {
         if (!$adapterClass) {
-            if (extension_loaded('gd')) {
+            if (extension_loaded('imagick')) {
+                $adapterClass = 'sfImagickAdapter';
+            } elseif (extension_loaded('gd')) {
                 $adapterClass = 'sfGDAdapter';
             } else {
-                $adapterClass = 'sfImageMagickAdapter';
+                throw new sfException('No suitable module is loaded for creating thumbnails. Need gd or imagick extension.');
             }
         }
         $this->adapter = new $adapterClass($maxWidth, $maxHeight, $scale, $inflate, $quality, $adapterOptions);

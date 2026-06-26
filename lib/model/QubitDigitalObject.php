@@ -30,6 +30,16 @@ class QubitDigitalObject extends BaseDigitalObject
     public const THUMB_MIME_TYPE = 'image/jpeg';
     public const THUMB_EXTENSION = 'jpg';
 
+    // Constants for exploding multi-page assets
+    public const MULTI_PAGE_ASSET_EXTRACT_BACKGROUND = 'white';
+    public const MULTI_PAGE_ASSET_EXTRACT_FORMAT = 'jpeg';
+    public const MULTI_PAGE_ASSET_EXTRACT_QUALITY = 100;
+    public const MULTI_PAGE_ASSET_EXTRACT_RESOLUTION = 300;  // This controls the DPI
+
+    // Cached properties for finding the state of loaded image manipulation extensions
+    public static $IMAGICK_EXTENSION_LOADED;
+    public static $GD_EXTENSION_LOADED;
+
     // Variables for save actions
     public $assets = [];
     public $indexOnSave = true;
@@ -1929,7 +1939,7 @@ class QubitDigitalObject extends BaseDigitalObject
     /**
      * Set 'page_count' property for this asset.
      *
-     * NOTE: requires the ImageMagick library
+     * Requires the imagick extension.
      *
      * @param null|mixed $connection
      *
@@ -1937,30 +1947,23 @@ class QubitDigitalObject extends BaseDigitalObject
      */
     public function setPageCount($connection = null)
     {
-        if ($this->canThumbnail() && sfImageMagickAdapter::isImageMagickAvailable()) {
-            $filename = ($this->derivativesGeneratedFromExternalMaster($this->usageId)) ? $this->getLocalPath() : $this->getAbsolutePath();
-
-            $extension = pathinfo($filename, PATHINFO_EXTENSION);
-
-            // If processing a PDF, attempt to use pdfinfo as it's faster
-            if ('pdf' == strtolower($extension) && sfImageMagickAdapter::pdfinfoToolAvailable()) {
-                $pages = sfImageMagickAdapter::getPdfinfoPageCount($filename);
-            } else {
-                $command = 'identify '.$filename;
-                exec($command, $output, $status);
-                $pages = count($output);
-            }
-
-            if (0 == $status) {
-                // Add "number of pages" property
-                $pageCount = new QubitProperty();
-                $pageCount->setObjectId($this->id);
-                $pageCount->setName('page_count');
-                $pageCount->setScope('digital_object');
-                $pageCount->setValue($pages, ['sourceCulture' => true]);
-                $pageCount->save($connection);
-            }
+        if (!$this->canThumbnail() || !self::imagickExtensionLoaded()) {
+            return $this;
         }
+
+        $filename = ($this->derivativesGeneratedFromExternalMaster($this->usageId)) ? $this->getLocalPath() : $this->getAbsolutePath();
+
+        $im = new Imagick();
+        $im->pingImage($filename);
+        $pages = $im->getNumberImages();
+        $im->clear();
+
+        $pageCount = new QubitProperty();
+        $pageCount->setObjectId($this->id);
+        $pageCount->setName('page_count');
+        $pageCount->setScope('digital_object');
+        $pageCount->setValue($pages, ['sourceCulture' => true]);
+        $pageCount->save($connection);
 
         return $this;
     }
@@ -1980,6 +1983,8 @@ class QubitDigitalObject extends BaseDigitalObject
         if ($pageCount) {
             return (int) $pageCount->getValue();
         }
+
+        return 0;
     }
 
     // TODO: add $options for filter
@@ -1996,35 +2001,50 @@ class QubitDigitalObject extends BaseDigitalObject
 
     /**
      * Explode multi-page asset into multiple image files.
-     *
-     * @return unknown
      */
     public function explodeMultiPageAsset()
     {
         $pageCount = $this->getPageCount();
 
-        if ($pageCount > 1 && $this->canThumbnail()) {
+        $fileList = [];
+
+        if ($pageCount > 1 && $this->canThumbnail() && self::imagickExtensionLoaded()) {
             if ($this->derivativesGeneratedFromExternalMaster($this->usageId)) {
                 $path = $this->localPath;
             } else {
                 $path = $this->getAbsolutePath();
             }
 
-            $filenameMinusExtension = preg_replace('/\.[a-zA-Z]{2,3}$/', '', $path);
+            $filenameMinusExtension = pathinfo($path, PATHINFO_FILENAME);
 
-            $command = 'convert -density 300 -alpha remove -quality 100 ';
-            $command .= $path;
-            $command .= ' '.$filenameMinusExtension.'_%02d.'.self::THUMB_EXTENSION;
-            exec($command, $output, $status);
+            $imagick = new Imagick();
 
-            if (1 == $status) {
-                throw new sfException('Encountered error'.(is_array($output) && count($output) > 0 ? ': '.implode('\n'.$output) : ' ').' while running convert (ImageMagick).');
+            // Set read resolution before opening file
+            $imagick->setResolution(
+                self::MULTI_PAGE_ASSET_EXTRACT_RESOLUTION,
+                self::MULTI_PAGE_ASSET_EXTRACT_RESOLUTION,
+            );
+            $imagick->readImage($path);
+
+            foreach ($imagick as $index => $page) {
+                $page->setImageAlphaChannel(Imagick::ALPHACHANNEL_REMOVE);
+                $page->setImageBackgroundColor(self::MULTI_PAGE_ASSET_EXTRACT_BACKGROUND);
+                $page->setImageFormat(self::MULTI_PAGE_ASSET_EXTRACT_FORMAT);
+                $page->setImageCompressionQuality(self::MULTI_PAGE_ASSET_EXTRACT_QUALITY);
+
+                $filename = sprintf(
+                    '%s_%02d.%s',
+                    $filenameMinusExtension,
+                    $index,
+                    self::THUMB_EXTENSION,
+                );
+
+                $page->writeImage($filename);
+
+                $fileList[] = $filename;
             }
 
-            // Build an array of the exploded file names
-            for ($i = 0; $i < $pageCount; ++$i) {
-                $fileList[] = $filenameMinusExtension.sprintf('_%02d.', $i).self::THUMB_EXTENSION;
-            }
+            $imagick->clear();
         }
 
         return $fileList;
@@ -2038,7 +2058,7 @@ class QubitDigitalObject extends BaseDigitalObject
      * object and linked child digital object and move the derived
      * asset to the appropriate directory for the new (child) info object
      *
-     * NOTE: Requires the Imagemagick library for creating derivative assets
+     * NOTE: Requires the imagick extension for creating derivative assets
      *
      * @param null|mixed $connection
      *
@@ -2046,12 +2066,12 @@ class QubitDigitalObject extends BaseDigitalObject
      */
     public function createCompoundChildren($connection = null)
     {
-        // Bail out if the imagemagick library is not installed
-        if (false === sfImageMagickAdapter::isImageMagickAvailable()) {
+        $pages = $this->explodeMultiPageAsset();
+
+        // Bail out if no pages were found
+        if (0 === count($pages)) {
             return $this;
         }
-
-        $pages = $this->explodeMultiPageAsset();
 
         foreach ($pages as $i => $filepath) {
             $filename = basename($filepath);
@@ -2168,6 +2188,38 @@ class QubitDigitalObject extends BaseDigitalObject
      */
 
     /**
+     * Determine whether the imagick extension is loaded.
+     *
+     * @return bool true if the extension is loaded and can be used, false otherwise
+     */
+    public static function imagickExtensionLoaded(): bool
+    {
+        if (null !== self::$IMAGICK_EXTENSION_LOADED) {
+            return self::$IMAGICK_EXTENSION_LOADED;
+        }
+
+        self::$IMAGICK_EXTENSION_LOADED = extension_loaded('imagick');
+
+        return self::$IMAGICK_EXTENSION_LOADED;
+    }
+
+    /**
+     * Determine whether the gd extension is loaded.
+     *
+     * @return bool true if the extension is loaded and can be used, false otherwise
+     */
+    public static function gdExtensionLoaded()
+    {
+        if (null !== self::$GD_EXTENSION_LOADED) {
+            return self::$GD_EXTENSION_LOADED;
+        }
+
+        self::$GD_EXTENSION_LOADED = extension_loaded('gd');
+
+        return self::$GD_EXTENSION_LOADED;
+    }
+
+    /**
      * Create a thumbnail derivative for the current digital object.
      *
      * @param null|mixed $connection
@@ -2204,7 +2256,7 @@ class QubitDigitalObject extends BaseDigitalObject
         if (null === $this->localPath && QubitTerm::EXTERNAL_FILE_ID == $this->usageId) {
             $filename = basename($this->path);
             if (false === $contents = $this->file_get_contents_if_not_empty($this->path)) {
-                throw new sfException(sprintf('Error reading file or file is empty.', $filepath));
+                throw new sfException("Error reading file '{$filename}' or file is empty.");
             }
             $this->localPath = Qubit::saveTemporaryFile($filename, $contents);
         }
@@ -2382,7 +2434,7 @@ class QubitDigitalObject extends BaseDigitalObject
     }
 
     /**
-     * Get a valid adapter for the sfThumbnail library (either GD or ImageMagick)
+     * Get a valid adapter for the sfThumbnail library (either GD or imagick)
      * Cache the adapter value because is very expensive to calculate it.
      *
      * @return mixed name of adapter on success, false on failure
@@ -2396,25 +2448,15 @@ class QubitDigitalObject extends BaseDigitalObject
             return $context->get('thumbnailAdapter');
         }
 
-        if (sfImageMagickAdapter::isImageMagickAvailable()) {
-            $adapter = 'sfImageMagickAdapter';
-        } elseif (QubitDigitalObject::hasGdExtension()) {
+        if (self::imagickExtensionLoaded()) {
+            $adapter = 'sfImagickAdapter';
+        } elseif (self::gdExtensionLoaded()) {
             $adapter = 'sfGDAdapter';
         }
 
         $context->set('thumbnailAdapter', $adapter);
 
         return $adapter;
-    }
-
-    /**
-     * Test if GD Extension for PHP is installed.
-     *
-     * @return bool true if GD extension found
-     */
-    public static function hasGdExtension()
-    {
-        return extension_loaded('gd');
     }
 
     /**
@@ -2445,13 +2487,13 @@ class QubitDigitalObject extends BaseDigitalObject
 
         $canThumbnail = false;
 
-        // For Images, we can create thumbs with either GD or ImageMagick
+        // For Images, we can create thumbs with either GD or imagick
         if ('image' == substr($mimeType, 0, 5) && strlen($adapter)) {
             $canThumbnail = true;
         }
 
-        // For PDFs we can only create thumbs with ImageMagick
-        elseif ('application/pdf' == $mimeType && 'sfImageMagickAdapter' == $adapter) {
+        // For PDFs we can only create thumbs with imagick
+        elseif ('application/pdf' == $mimeType && 'sfImagickAdapter' == $adapter) {
             $canThumbnail = true;
         }
 

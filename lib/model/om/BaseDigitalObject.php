@@ -92,7 +92,7 @@ abstract class BaseDigitalObject extends QubitObject implements ArrayAccess
 
     try
     {
-      return call_user_func_array(array($this, 'QubitObject::__isset'), $args);
+      return parent::__isset(...$args);
     }
     catch (sfException $e)
     {
