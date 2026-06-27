@@ -118,7 +118,7 @@ class RepositoryEditThemeAction extends sfAction
                 sfContext::getInstance()->getConfiguration()->loadHelpers('Url');
 
                 $this->form->setValidator($name, new sfValidatorFile([
-                    'max_size' => '262144', // 256K
+                    'max_size' => '512000', // 500K
                     'mime_types' => ['image/png'],
                     // Crop image, it is synchronous but it should be fast
                     'validated_file_class' => 'arRepositoryThemeCropValidatedFile',
@@ -129,7 +129,7 @@ class RepositoryEditThemeAction extends sfAction
                 $this->form->setWidget($name, new arB5WidgetFormInputFileEditable([
                     'label' => $this->context->i18n->__('Banner'),
                     'help' => $this->context->i18n->__(
-                        'Requirements: PNG format, 256K max. size.<br />Recommended dimensions of %1%x%2%px, it will be cropped if ImageMagick is installed.',
+                        'Requirements: PNG format, 500K max. size.<br />Recommended dimensions of %1%x%2%px, it will be cropped if ImageMagick is installed.',
                         [
                             '%1%' => arRepositoryThemeCropValidatedFile::BANNER_MAX_WIDTH,
                             '%2%' => arRepositoryThemeCropValidatedFile::BANNER_MAX_HEIGHT,
@@ -153,7 +153,7 @@ class RepositoryEditThemeAction extends sfAction
                 sfContext::getInstance()->getConfiguration()->loadHelpers('Url');
 
                 $this->form->setValidator($name, new sfValidatorFile([
-                    'max_size' => '262144', // 256K
+                    'max_size' => '512000', // 500K
                     'mime_types' => ['image/png'],
                     // Crop image, it is synchronous but it should be fast
                     'validated_file_class' => 'arRepositoryThemeCropValidatedFile',
@@ -164,7 +164,7 @@ class RepositoryEditThemeAction extends sfAction
                 $this->form->setWidget($name, new arB5WidgetFormInputFileEditable([
                     'label' => $this->context->i18n->__('Logo'),
                     'help' => $this->context->i18n->__(
-                        'Requirements: PNG format, 256K max. size.<br />Recommended dimensions of %1%x%2%px, it will be cropped if ImageMagick is installed.',
+                        'Requirements: PNG format, 500K max. size.<br />Recommended dimensions of %1%x%2%px, it will be cropped if ImageMagick is installed.',
                         [
                             '%1%' => arRepositoryThemeCropValidatedFile::LOGO_MAX_WIDTH,
                             '%2%' => arRepositoryThemeCropValidatedFile::LOGO_MAX_HEIGHT,

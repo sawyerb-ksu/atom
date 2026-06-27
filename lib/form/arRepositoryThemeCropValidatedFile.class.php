@@ -29,6 +29,9 @@ class arRepositoryThemeCropValidatedFile extends sfValidatedFile
     public const LOGO_MAX_HEIGHT = 270;
     public const BANNER_MAX_WIDTH = 800;
     public const BANNER_MAX_HEIGHT = 300;
+    public const IMAGICK_MEMORY_LIMIT_MB = 64;
+    public const IMAGICK_MAP_LIMIT_MB = 64;
+    public const IMAGICK_AREA_LIMIT_PIXELS = 16000000;
 
     public function save($file = null, $fileMode = 0666, $create = true, $dirMode = 0777)
     {
@@ -38,16 +41,16 @@ class arRepositoryThemeCropValidatedFile extends sfValidatedFile
             return $file;
         }
 
-        if (null === $dimensions = self::getCropDimensionsFromPath($this->savedName)) {
+        if (null === $dimensions = self::getTargetDimensionsFromPath($this->savedName)) {
             return $file;
         }
 
-        $this->cropImage($dimensions['width'], $dimensions['height']);
+        $this->resizeAndCropImage($dimensions['width'], $dimensions['height']);
 
         return $file;
     }
 
-    public static function getCropDimensionsFromPath($path)
+    public static function getTargetDimensionsFromPath($path)
     {
         $pathInfo = pathinfo($path);
 
@@ -66,21 +69,68 @@ class arRepositoryThemeCropValidatedFile extends sfValidatedFile
         }
     }
 
+    public static function getResizeGeometry($sourceWidth, $sourceHeight, $targetWidth, $targetHeight)
+    {
+        if (
+            0 >= $sourceWidth
+            || 0 >= $sourceHeight
+            || 0 >= $targetWidth
+            || 0 >= $targetHeight
+        ) {
+            return null;
+        }
+
+        // Scale to fully cover the target box while preserving aspect ratio.
+        $scale = max($targetWidth / $sourceWidth, $targetHeight / $sourceHeight);
+        $resizeWidth = (int) ceil($sourceWidth * $scale);
+        $resizeHeight = (int) ceil($sourceHeight * $scale);
+
+        return [
+            // Crop back to the exact target size from the centered overflow.
+            'resizeWidth' => $resizeWidth,
+            'resizeHeight' => $resizeHeight,
+            'cropX' => max(0, (int) floor(($resizeWidth - $targetWidth) / 2)),
+            'cropY' => max(0, (int) floor(($resizeHeight - $targetHeight) / 2)),
+        ];
+    }
+
     protected function shouldCropImages()
     {
         return QubitDigitalObject::imagickExtensionLoaded();
     }
 
-    protected function cropImage($width, $height)
+    protected function resizeAndCropImage($width, $height)
     {
         try {
-            $image = new Imagick($this->savedName);
+            $image = new Imagick();
+            $image->setResourceLimit(Imagick::RESOURCETYPE_MEMORY, self::IMAGICK_MEMORY_LIMIT_MB);
+            $image->setResourceLimit(Imagick::RESOURCETYPE_MAP, self::IMAGICK_MAP_LIMIT_MB);
+            $image->setResourceLimit(Imagick::RESOURCETYPE_AREA, self::IMAGICK_AREA_LIMIT_PIXELS);
+            $image->readImage($this->savedName);
+            $geometry = self::getResizeGeometry(
+                $image->getImageWidth(),
+                $image->getImageHeight(),
+                $width,
+                $height
+            );
 
-            $cropWidth = min($width, $image->getImageWidth());
-            $cropHeight = min($height, $image->getImageHeight());
+            if (null === $geometry) {
+                $image->clear();
+                $image->destroy();
 
-            $image->cropImage($cropWidth, $cropHeight, 0, 0);
+                return;
+            }
+
+            $image->resizeImage(
+                $geometry['resizeWidth'],
+                $geometry['resizeHeight'],
+                Imagick::FILTER_LANCZOS,
+                1
+            );
+            $image->cropImage($width, $height, $geometry['cropX'], $geometry['cropY']);
             $image->setImagePage(0, 0, 0, 0);
+            $image->stripImage();
+            $image->setImageCompressionQuality(90);
             $image->writeImage($this->savedName);
             $image->clear();
             $image->destroy();
