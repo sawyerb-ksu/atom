@@ -41,12 +41,13 @@ class QubitSlugTest extends \PHPUnit\Framework\TestCase
             ['test----slug', 'test-slug', 'test-slug'],
             ['Test Slug', 'test-slug', 'Test-Slug'],
             ['Test Slug 123', 'test-slug-123', 'Test-Slug-123'],
+            ['Test;Slug', 'test-slug', 'Test-Slug'],
 
             // Apostrophes are removed
             ["Test 'Slug'", 'test-slug', 'Test-Slug'],
 
             // Allowed safe punctuation in permissive; becomes dashes in restrictive
-            ['a_-~:;,=*@b', 'a-b', 'a_-~:;,=*@b'],
+            ['a_-~:,=*@b', 'a-b', 'a_-~:,=*@b'],
 
             // Accented Latin transliteration vs preservation
             ['Tést Slug', 'test-slug', 'Tést-Slug'],

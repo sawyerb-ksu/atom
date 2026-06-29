@@ -83,8 +83,6 @@ class QubitSlug extends BaseSlug
      * - \p{Cc}: Control characters (ASCII control range)
      *
      * @param string     $slug         The string we want to slugify
-     * @param bool       $dropArticles Whether or not to drop English articles from the slug.
-     *                                 We can disable this when we generate slugs by identifier.
      * @param null|mixed $creationType
      */
     public static function slugify($slug, $creationType = null)
@@ -102,8 +100,8 @@ class QubitSlug extends BaseSlug
         switch ($slugCreation) {
             case QubitSlug::SLUG_PERMISSIVE:
                 if ($isAscii) {
-                    // ASCII allowlist: letters/digits and safe ASCII - _ ~ : ; , = * @; others become "-"
-                    $slug = preg_replace('/[^A-Za-z0-9\-_:;,=\*@~]+/', '-', $slug);
+                    // ASCII allowlist: letters/digits and safe ASCII - _ ~ : , = * @; others become "-"
+                    $slug = preg_replace('/[^A-Za-z0-9\-_:,=\*@~]+/', '-', $slug);
 
                     break;
                 }
@@ -113,8 +111,8 @@ class QubitSlug extends BaseSlug
                 // Normalize any Unicode dash punctuation to ASCII hyphen-minus
                 $slug = preg_replace('/\p{Pd}+/u', '-', $slug); // map Pd to "-"
 
-                // Allow Unicode letters/digits plus safe ASCII: - _ ~ : ; , = * @
-                $slug = preg_replace('/[^\p{L}\p{N}\-_:;,=\*@~]+/u', '-', $slug); // property-based allowlist
+                // Allow Unicode letters/digits plus safe ASCII: - _ ~ : , = * @
+                $slug = preg_replace('/[^\p{L}\p{N}\-_:,=\*@~]+/u', '-', $slug); // property-based allowlist
 
                 break;
 
