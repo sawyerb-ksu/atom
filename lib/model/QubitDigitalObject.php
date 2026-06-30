@@ -1186,12 +1186,11 @@ class QubitDigitalObject extends BaseDigitalObject
         if (
             QubitTerm::REFERENCE_ID == $this->usageId
             && $this->isImage()
+            && self::imagickExtensionLoaded()
             && is_readable($waterMarkPathName = sfConfig::get('sf_web_dir').'/watermark.png')
             && is_file($waterMarkPathName)
         ) {
-            $filePathName = $this->getAbsolutePath();
-            $command = 'composite -dissolve 15 -tile '.$waterMarkPathName.' '.escapeshellarg($filePathName).' '.escapeshellarg($filePathName);
-            exec($command);
+            $this->applyWatermark($this->getAbsolutePath(), $waterMarkPathName);
         }
 
         // Update search index for related object
@@ -3419,6 +3418,42 @@ class QubitDigitalObject extends BaseDigitalObject
                 QubitTerm::REFERENCE_ID,
                 QubitTerm::THUMBNAIL_ID,
             ]);
+    }
+
+    protected function applyWatermark($imagePath, $watermarkPath)
+    {
+        try {
+            $image = new Imagick($imagePath);
+            $watermark = new Imagick($watermarkPath);
+
+            $watermark->evaluateImage(
+                Imagick::EVALUATE_MULTIPLY,
+                0.15,
+                Imagick::CHANNEL_ALPHA
+            );
+
+            $canvas = new Imagick();
+            $canvas->newImage(
+                $image->getImageWidth(),
+                $image->getImageHeight(),
+                new ImagickPixel('transparent')
+            );
+            $canvas->setImageFormat($image->getImageFormat());
+            $canvas->textureImage($watermark);
+
+            $image->compositeImage($canvas, Imagick::COMPOSITE_OVER, 0, 0);
+            $image->writeImage($imagePath);
+
+            $canvas->clear();
+            $canvas->destroy();
+            $watermark->clear();
+            $watermark->destroy();
+            $image->clear();
+            $image->destroy();
+        } catch (Exception $e) {
+            // Leave the original image untouched if watermarking fails.
+            sfContext::getInstance()->getLogger()->err(sprintf('Error applying watermark to "%s": %s', $imagePath, $e->getMessage()));
+        }
     }
 
     protected function insert($connection = null)
