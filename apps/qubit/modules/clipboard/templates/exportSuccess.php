@@ -81,7 +81,8 @@
 
     <ul class="actions mb-3 nav gap-2">
       <li><input class="btn atom-btn-outline-success" type="submit" id="exportSubmit" value="<?php echo __('Export'); ?>"></li>
-      <li><?php echo link_to(__('Cancel'), !empty($sf_request->getReferer()) ? $sf_request->getReferer() : ['module' => 'clipboard', 'action' => 'view'], ['class' => 'btn atom-btn-outline-light', 'role' => 'button']); ?></li>
+      <?php $cancelTarget = Qubit::filterRedirectTarget($sf_request->getReferer()); ?>
+      <li><?php echo link_to(__('Cancel'), null !== $cancelTarget ? $cancelTarget : ['module' => 'clipboard', 'action' => 'view'], ['class' => 'btn atom-btn-outline-light', 'role' => 'button']); ?></li>
     </ul>
 
   </form>

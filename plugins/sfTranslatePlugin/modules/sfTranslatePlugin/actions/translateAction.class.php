@@ -49,6 +49,10 @@ class sfTranslatePluginTranslateAction extends sfAction
 
         $messageSource->getCache()->clean();
 
-        $this->redirect($request->getReferer());
+        if (null !== $redirectUrl = Qubit::filterRedirectTarget($request->getReferer())) {
+            $this->redirect($redirectUrl);
+        }
+
+        $this->redirect('@homepage');
     }
 }

@@ -43,7 +43,11 @@ class JobsDeleteAction extends sfAction
                 $this->deleteJobsNotInProgress([$job]);
             }
 
-            $this->redirect($request->getReferer());
+            if (null !== $redirectUrl = Qubit::filterRedirectTarget($request->getReferer())) {
+                $this->redirect($redirectUrl);
+            }
+
+            $this->redirect('@homepage');
         } elseif ($this->context->user->isAuthenticated() && !$token) {
             // Handle bulk deletion of jobs associated with an authenticated user
             $jobs = QubitJob::getJobsByUser($this->context->user);
