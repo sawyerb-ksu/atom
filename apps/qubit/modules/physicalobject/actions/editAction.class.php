@@ -41,7 +41,7 @@ class PhysicalObjectEditAction extends DefaultEditAction
 
                 $this->resource->save();
 
-                if (null !== $next = $this->form->getValue('next')) {
+                if (null !== $next = Qubit::filterRedirectTarget($this->form->getValue('next'))) {
                     $this->redirect($next);
                 }
 

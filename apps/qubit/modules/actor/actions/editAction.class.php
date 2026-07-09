@@ -37,7 +37,7 @@ class ActorEditAction extends DefaultEditAction
 
                 $this->resource->save();
 
-                if (isset($request->id) && (0 < strlen($next = $this->form->getValue('next')))) {
+                if (isset($request->id) && null !== $next = Qubit::filterRedirectTarget($this->form->getValue('next'))) {
                     $this->redirect($next);
                 }
 

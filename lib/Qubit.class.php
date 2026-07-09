@@ -19,14 +19,57 @@
 
 class Qubit
 {
-    public static function pathInfo($url)
+    public static function pathInfo($url, $request = null)
     {
+        // Allow callers and tests to supply a request explicitly; otherwise use the current one.
+        if (null === $request) {
+            $request = sfContext::getInstance()->request;
+        }
+
         // Other options to get path info from URL include parse_url() or building
         // an exact regex from the BNF in RFC 1738.  Note however that our only
         // goal is to get path info from valid URL, which the following simple
         // regex should accomplish.  Slash characters don't occur in the scheme,
         // user, password, host, or port component of valid URL
-        return preg_replace('/^(?:[^:]+:\/\/[^\/]+)?'.preg_quote(sfContext::getInstance()->request->getPathInfoPrefix(), '/').'/', null, $url);
+        return preg_replace('/^(?:[^:]+:\/\/[^\/]+)?'.preg_quote($request->getPathInfoPrefix(), '/').'/', '', $url);
+    }
+
+    /**
+     * Filter redirect targets.
+     *
+     * @param string       $target  The redirect target URL
+     * @param sfWebRequest $request The request object (optional)
+     *
+     * @return null|string The filtered redirect target, or null
+     */
+    public static function filterRedirectTarget($target)
+    {
+        if (!is_string($target)) {
+            return null;
+        }
+
+        // Reject empty values and control characters before any URL handling.
+        $target = trim($target);
+        if ('' === $target || preg_match('/[\x00-\x1F\x7F]/', $target)) {
+            return null;
+        }
+
+        // Reject protocol-relative and UNC-style targets, which browsers can treat as external locations.
+        // This is rejecting targets that start with "//" or "\\".  Note that the latter is not a valid
+        // URL but is accepted by some browsers as a UNC path.
+        if (0 === strpos($target, '//') || 0 === strpos($target, '\\\\')) {
+            return null;
+        }
+
+        // Only allow absolute URLs when they resolve to the configured site origin.
+        if (preg_match('/^[a-z][a-z0-9+\-.]*:/i', $target)) {
+            $parts = parse_url($target);
+            if (false === $parts || !self::isSameConfiguredOriginUrl($parts)) {
+                return null;
+            }
+        }
+
+        return $target;
     }
 
     // Alternative to format_date() symfony helper
@@ -417,5 +460,45 @@ class Qubit
                 return $match[2];
             }
         }, $mask);
+    }
+
+    /**
+     * Determine if a URL matches the configured site origin.
+     *
+     * @param array $urlParts Parsed URL components
+     *
+     * @return bool
+     */
+    private static function isSameConfiguredOriginUrl(array $urlParts)
+    {
+        // If the URL is missing a scheme or host, it cannot match the configured origin.
+        if (!isset($urlParts['scheme'], $urlParts['host'])) {
+            return false;
+        }
+
+        $configuredBaseUrl = sfConfig::get('app_siteBaseUrl');
+        if (!is_string($configuredBaseUrl) || '' === trim($configuredBaseUrl)) {
+            return false;
+        }
+
+        $baseUrlParts = parse_url($configuredBaseUrl);
+        if (false === $baseUrlParts || !isset($baseUrlParts['scheme'], $baseUrlParts['host'])) {
+            return false;
+        }
+
+        // Compare scheme and host case-insensitively.
+        if (0 !== strcasecmp($urlParts['scheme'], $baseUrlParts['scheme'])) {
+            return false;
+        }
+
+        if (0 !== strcasecmp($urlParts['host'], $baseUrlParts['host'])) {
+            return false;
+        }
+
+        // Compare ports numerically, defaulting to null if not present.
+        $urlPort = isset($urlParts['port']) ? (int) $urlParts['port'] : null;
+        $baseUrlPort = isset($baseUrlParts['port']) ? (int) $baseUrlParts['port'] : null;
+
+        return $urlPort === $baseUrlPort;
     }
 }

@@ -71,7 +71,7 @@ class UserLoginAction extends sfAction
                     // Can be read by reverse proxies to allow users to bypass caching
                     setcookie('atom_authenticated', '1', ['path' => '/', 'secure' => true, 'samesite' => 'strict']);
 
-                    if (null !== $next = $this->form->getValue('next')) {
+                    if (null !== $next = Qubit::filterRedirectTarget($this->form->getValue('next'))) {
                         $this->redirect($next);
                     }
 

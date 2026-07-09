@@ -41,7 +41,7 @@
     </div>
 
     <ul class="actions mb-3 nav gap-2">
-      <?php if (null !== $next = $form->getValue('next')) { ?>
+      <?php if (null !== $next = Qubit::filterRedirectTarget($form->getValue('next'))) { ?>
         <li><?php echo link_to(__('Cancel'), $next, ['class' => 'btn atom-btn-outline-light', 'role' => 'button']); ?></li>
       <?php } elseif (isset($sf_request->getAttribute('sf_route')->resource)) { ?>
         <li><?php echo link_to(__('Cancel'), [$resource, 'module' => 'physicalobject'], ['class' => 'btn atom-btn-outline-light', 'role' => 'button']); ?></li>

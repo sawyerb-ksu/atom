@@ -44,7 +44,7 @@ class PhysicalObjectDeleteAction extends sfAction
             if ($this->form->isValid()) {
                 $this->resource->delete();
 
-                $next = $this->form->getValue('next');
+                $next = Qubit::filterRedirectTarget($this->form->getValue('next'));
                 if (isset($next)) {
                     $this->redirect($next);
                 }
