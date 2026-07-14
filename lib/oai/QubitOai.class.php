@@ -379,16 +379,17 @@ class QubitOai
         libxml_use_internal_errors(true);
 
         // FIXME: trap possible load validation errors (just suppress for now)
-        $doc = new DOMDocument('1.0', 'UTF-8');
+        $doc = new QubitXmlDomDocument('1.0', 'UTF-8');
 
         // Enforce all XML parsing rules and validation
         $doc->validateOnParse = true;
-        $doc->resolveExternals = true;
+        $doc->resolveExternals = false;
 
         $doc->formatOutput = false;
-        $doc->preserveWhitespace = false;
+        $doc->preserveWhiteSpace = false;
+        $doc->substituteEntities = false;
 
-        $doc->loadXML($XMLString);
+        $doc->loadXML($XMLString, LIBXML_NONET);
 
         $xsi = false;
         $doc->namespaces = [];

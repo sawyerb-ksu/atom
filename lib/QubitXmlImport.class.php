@@ -535,7 +535,7 @@ class QubitXmlImport
 
         // FIXME: trap possible load validation errors (just suppress for now)
         $err_level = error_reporting(0);
-        $doc = new DOMDocument('1.0', 'UTF-8');
+        $doc = new QubitXmlDomDocument('1.0', 'UTF-8');
 
         // Default $strictXmlParsing to false
         $strictXmlParsing = (isset($options['strictXmlParsing'])) ? $options['strictXmlParsing'] : false;
@@ -547,17 +547,17 @@ class QubitXmlImport
         if ($strictXmlParsing) {
             // enforce all XML parsing rules and validation
             $doc->validateOnParse = true;
-            $doc->resolveExternals = true;
+            $doc->resolveExternals = false;
         } else {
             // try to load whatever we've got, even if it's malformed or invalid
             $doc->recover = true;
             $doc->strictErrorChecking = false;
         }
         $doc->formatOutput = false;
-        $doc->preserveWhitespace = false;
-        $doc->substituteEntities = true;
+        $doc->preserveWhiteSpace = false;
+        $doc->substituteEntities = false;
 
-        $doc->loadXML($this->removeDefaultNamespace($rawXML));
+        $doc->loadXML($this->removeDefaultNamespace($rawXML), LIBXML_NONET);
 
         $xsi = false;
         $doc->namespaces = [];
