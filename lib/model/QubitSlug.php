@@ -92,6 +92,15 @@ class QubitSlug extends BaseSlug
 
         // Normalize input and remove literal apostrophes quickly (iconv may add more later)
         $slug = (string) $slug; // ensure string
+        // If valid UTF-8, empty pattern matches and preg_match() returns 1 otherwise
+        // PCRE fails before matching and preg_match() returns false.
+        if (1 !== preg_match('//u', $slug)) {
+            // Drop malformed UTF-8 bytes before using Unicode regexes. Suppress iconv
+            // warnings - conversion failure is still handled after.
+            $slug = @iconv('UTF-8', 'UTF-8//IGNORE', $slug);
+            $slug = false === $slug ? '' : $slug;
+        }
+
         $slug = str_replace("'", '', $slug); // fast apostrophe removal
 
         // ASCII fast-path to avoid Unicode regex/iconv when not needed

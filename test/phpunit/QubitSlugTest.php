@@ -106,4 +106,20 @@ class QubitSlugTest extends \PHPUnit\Framework\TestCase
             ['Hi 😀', 'hi', 'Hi'],
         ];
     }
+
+    public function testSlugifyRestrictiveIgnoresMalformedUtf8Bytes(): void
+    {
+        $this->assertSame(
+            'ab',
+            QubitSlug::slugify("A\xFFB", QubitSlug::SLUG_RESTRICTIVE)
+        );
+    }
+
+    public function testSlugifyPermissiveIgnoresMalformedUtf8Bytes(): void
+    {
+        $this->assertSame(
+            'AB',
+            QubitSlug::slugify("A\xFFB", QubitSlug::SLUG_PERMISSIVE)
+        );
+    }
 }
