@@ -33,8 +33,6 @@
  * 'translate' permissions.
  *
  * @author Sawyer Borror <sawyerb@ksu.edu>
- * @package    qubit
- * @subpackage security
  */
 class QubitTranslateBarAccess
 {

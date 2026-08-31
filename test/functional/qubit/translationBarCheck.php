@@ -1,4 +1,5 @@
 <?php
+
 //
 // test/translate-bar-check.php — verifies the QubitTranslateBarAccess patch.
 //
@@ -36,10 +37,10 @@ $failures = 0;
 /**
  * Load the homepage (renders the shared footer) and check for the bar.
  *
- * @param string $label Description of the scenario for the report line
- * @param sfBrowserBase $browser In-process test browser
- * @param bool $expectBar Whether #l10n-client should be present
- * @param bool $expectAuth Whether the browser user should be authenticated
+ * @param string        $label      Description of the scenario for the report line
+ * @param sfBrowserBase $browser    In-process test browser
+ * @param bool          $expectBar  Whether #l10n-client should be present
+ * @param bool          $expectAuth Whether the browser user should be authenticated
  *
  * @return int 0 on success, 1 on failure
  */
